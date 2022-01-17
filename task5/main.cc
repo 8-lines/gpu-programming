@@ -3,7 +3,6 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 120
 #define CL_HPP_MINIMUM_OPENCL_VERSION 120
 #define CL_TARGET_OPENCL_VERSION 120
-
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -30,6 +29,9 @@ using clock_type = std::chrono::high_resolution_clock;
 using float_duration = std::chrono::duration<float>;
 using vec2 = Vector<float,2>;
 
+enum class Version { CPU, GPU };
+Version version;
+
 struct OpenCL {
     cl::Platform platform;
     cl::Device device;
@@ -38,9 +40,6 @@ struct OpenCL {
     cl::CommandQueue queue;
 };
 OpenCL opencl;
-
-enum class Version { CPU, GPU };
-Version version = Version::CPU;
 
 // Original code: https://github.com/cerrno/mueller-sph
 constexpr const float kernel_radius = 16;
@@ -66,12 +65,13 @@ struct Particle {
 
 };
 
-std::vector<Particle> particles;
 
 struct Particles_GPU {
     int count = 0;
     std::vector<float> positions_plain;
 };
+
+std::vector<Particle> particles;
 Particles_GPU particles_GPU;
 
 void generate_particles() {
@@ -87,7 +87,6 @@ void generate_particles() {
     float y0 = window_height*0.20f;
     float y1 = window_height*1.00f;
     float step = 1.5f*kernel_radius;
-
     for (float x=x0; x<x1; x+=step) {
         for (float y=y0; y<y1; y+=step) {
             particles.emplace_back(vec2{x+dist_x(prng),y+dist_y(prng)});       
@@ -95,7 +94,6 @@ void generate_particles() {
     }
     std::clog << "No. of particles: " << particles.size() << std::endl;
 }
-
 
 struct Buffers {
     cl::Buffer positions_buf;
@@ -232,7 +230,6 @@ void on_display() {
     if (no_screen) { glBindFramebuffer(GL_FRAMEBUFFER,0); }
 }
 
-
 void on_idle_cpu() {
     if (particles.empty()) { generate_particles(); }
     using std::chrono::duration_cast;
@@ -252,11 +249,9 @@ void on_idle_cpu() {
 }
 
 void on_idle_gpu() {
-    //std::clog << "GPU version is not implemented!" << std::endl; std::exit(1);
     if (particles_GPU.count == 0) {
          generate_particles_OpenCl(); 
     }
-
     using std::chrono::duration_cast;
     using std::chrono::seconds;
     using std::chrono::microseconds;
@@ -266,9 +261,8 @@ void on_idle_gpu() {
     cl::Kernel positions_kernel(opencl.program, "positions");
 
     int count = particles_GPU.count;
-
     auto t0 = clock_type::now();
-    // TODO see on_idle_cpu
+    
     density_kernel.setArg(0, buffers.positions_buf);
     density_kernel.setArg(1, buffers.densities_buf);
     density_kernel.setArg(2, buffers.pressures_buf);
